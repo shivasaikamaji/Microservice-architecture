@@ -87,7 +87,7 @@ public class ProductController {
     // DELETE PRODUCT
     // =========================
     @DeleteMapping("/{id}")
-    public String deleteProduct(@PathVariable @NonNull Long id) {
+    public String deleteProduct(@PathVariable @NonNugll Long id) {
 
         if (productRepository.existsById(id)) {
 
