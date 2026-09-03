@@ -1,33 +1,37 @@
 package order_service.controller;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.bind.annotation.*;
+
+import order_service.entity.Order;
+import order_service.repository.OrderRepository;
 
 @RestController
+@RequestMapping("/orders")
 public class OrderController {
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final OrderRepository orderRepository;
 
-    // Check Order Service
-    @GetMapping("/orders")
+    public OrderController(OrderRepository orderRepository) {
+        this.orderRepository = orderRepository;
+    }
+
+    // Test Order Service
+    @GetMapping
     public String getOrders() {
         return "Order Service is working";
     }
 
-    // Order Service calls User Service
-    @GetMapping("/orders/user/{id}")
-    public ResponseEntity<String> getUserFromOrderService(@PathVariable Long id) {
+    // Create Order
+    @PostMapping
+    public ResponseEntity<Order> createOrder(@RequestBody Order order) {
+        Order savedOrder = orderRepository.save(order);
+        return ResponseEntity.ok(savedOrder);
+    }
 
-        String url = "http://localhost:8081/users/" + id;
-
-        ResponseEntity<String> response =
-                restTemplate.getForEntity(url, String.class);
-
-        return ResponseEntity
-                .status(response.getStatusCode())
-                .body(response.getBody());
+    // Get orders by user ID
+    @GetMapping("/user/{id}")
+    public ResponseEntity<?> getOrdersByUser(@PathVariable Long id) {
+        return ResponseEntity.ok(orderRepository.findByUserId(id));
     }
 }
