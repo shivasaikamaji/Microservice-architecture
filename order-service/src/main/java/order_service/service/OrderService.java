@@ -17,40 +17,75 @@ public class OrderService {
         this.orderRepository = orderRepository;
     }
 
-    // Get all orders
+    // 1. Get all orders
     public List<Order> getAllOrders() {
         return orderRepository.findAll();
     }
 
-    // Get order by ID
+    // 2. Get order by ID
     public Optional<Order> getOrderById(Long id) {
         return orderRepository.findById(id);
     }
 
-    // Get orders by user ID
+    // 3. Get orders by user ID
     public List<Order> getOrdersByUserId(Long userId) {
         return orderRepository.findByUserId(userId);
     }
 
-    // Create order
+    // 4. Create order
     public Order createOrder(Order order) {
+
+        // Set default status when creating a new order
+        if (order.getStatus() == null || order.getStatus().isBlank()) {
+            order.setStatus("CREATED");
+        }
+
         return orderRepository.save(order);
     }
 
-    // Update order
+    // 5. Update order
     public Optional<Order> updateOrder(Long id, Order orderDetails) {
+
         return orderRepository.findById(id).map(order -> {
+
             order.setUserId(orderDetails.getUserId());
-            order.setProductId(orderDetails.getProductId());
+            order.setProductName(orderDetails.getProductName());
             order.setQuantity(orderDetails.getQuantity());
-            
+            order.setAmount(orderDetails.getAmount());
+
+            if (orderDetails.getStatus() != null) {
+                order.setStatus(orderDetails.getStatus());
+            }
 
             return orderRepository.save(order);
         });
     }
 
-    // Delete order
+    // 6. Update order status
+    public Optional<Order> updateOrderStatus(Long id, String status) {
+
+        return orderRepository.findById(id).map(order -> {
+
+            order.setStatus(status);
+
+            return orderRepository.save(order);
+        });
+    }
+
+    // 7. Cancel order
+    public Optional<Order> cancelOrder(Long id) {
+
+        return orderRepository.findById(id).map(order -> {
+
+            order.setStatus("CANCELLED");
+
+            return orderRepository.save(order);
+        });
+    }
+
+    // 8. Delete order
     public boolean deleteOrder(Long id) {
+
         if (!orderRepository.existsById(id)) {
             return false;
         }

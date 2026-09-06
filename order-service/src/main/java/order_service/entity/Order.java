@@ -1,9 +1,13 @@
 package order_service.entity;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 @Entity
@@ -16,18 +20,36 @@ public class Order {
 
     private Long userId;
 
-    private Long productId;
+    private String productName;
 
     private Integer quantity;
+
+    private BigDecimal amount;
+
+    private String status;
+
+    private LocalDateTime createdAt;
 
     public Order() {
     }
 
-    public Order(Long id, Long userId, Long productId, Integer quantity) {
+    public Order(Long id, Long userId, String productName,
+                 Integer quantity, BigDecimal amount,
+                 String status, LocalDateTime createdAt) {
         this.id = id;
         this.userId = userId;
-        this.productId = productId;
+        this.productName = productName;
         this.quantity = quantity;
+        this.amount = amount;
+        this.status = status;
+        this.createdAt = createdAt;
+    }
+
+    @PrePersist
+    public void prePersist() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
     }
 
     public Long getId() {
@@ -46,12 +68,12 @@ public class Order {
         this.userId = userId;
     }
 
-    public Long getProductId() {
-        return productId;
+    public String getProductName() {
+        return productName;
     }
 
-    public void setProductId(Long productId) {
-        this.productId = productId;
+    public void setProductName(String productName) {
+        this.productName = productName;
     }
 
     public Integer getQuantity() {
@@ -60,5 +82,29 @@ public class Order {
 
     public void setQuantity(Integer quantity) {
         this.quantity = quantity;
+    }
+
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
     }
 }
