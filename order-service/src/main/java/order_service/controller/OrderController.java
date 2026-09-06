@@ -21,12 +21,24 @@ public class OrderController {
 
     // 1. Create Order
     @PostMapping
-    public ResponseEntity<Order> createOrder(@RequestBody Order order) {
+public ResponseEntity<?> createOrder(@RequestBody Order order) {
 
-        Order savedOrder = orderService.createOrder(order);
-
-        return ResponseEntity.ok(savedOrder);
+    // Validate userId
+    if (order.getUserId() == null) {
+        return ResponseEntity.badRequest()
+                .body("userId is required");
     }
+
+    // Validate quantity
+    if (order.getQuantity() == null || order.getQuantity() <= 0) {
+        return ResponseEntity.badRequest()
+                .body("quantity must be greater than 0");
+    }
+
+    Order savedOrder = orderService.createOrder(order);
+
+    return ResponseEntity.ok(savedOrder);
+}
 
     // 2. Get Order by ID
     @GetMapping("/{id}")
