@@ -41,8 +41,8 @@ public class ProductService {
 
         Product product = optionalProduct.get();
 
-        product.setProductName(productDetails.getProductName());
-        product.setQuantity(productDetails.getQuantity());
+        product.setName(productDetails.getName());
+        product.setStock(productDetails.getStock());
         product.setPrice(productDetails.getPrice());
 
         return productRepository.save(product);
