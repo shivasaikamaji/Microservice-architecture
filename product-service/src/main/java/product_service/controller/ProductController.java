@@ -1,9 +1,9 @@
 package product_service.controller;
 
-import java.util.List;
-import java.util.Map;
+import java.math.BigDecimal;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,282 +14,273 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import product_service.entity.Product;
-import product_service.repository.ProductRepository;
+import jakarta.validation.Valid;
+
+import product_service.dto.CreateProductRequest;
+import product_service.dto.ErrorResponse;
+import product_service.dto.PatchProductRequest;
+import product_service.dto.ProductResponse;
+import product_service.dto.UpdateProductRequest;
+import product_service.service.ProductService;
 
 @RestController
 @RequestMapping("/api/v1/products")
 public class ProductController {
 
-    private final ProductRepository productRepository;
+    private final ProductService productService;
 
-    public ProductController(ProductRepository productRepository) {
-        this.productRepository = productRepository;
+    public ProductController(ProductService productService) {
+        this.productService = productService;
     }
 
-    // =========================================================
+    // =====================================================
     // GET ALL PRODUCTS
-    // GET /api/v1/products
-    // =========================================================
-    @GetMapping
-    public ResponseEntity<List<Product>> getAllProducts() {
+    // Pagination + Sorting + Filtering
+    // =====================================================
 
-        List<Product> products = productRepository.findAll();
+    @GetMapping
+    public ResponseEntity<?> getProducts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "id,asc") String sort,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) BigDecimal minPrice,
+            @RequestParam(required = false) BigDecimal maxPrice) {
+
+        // Validate page
+        if (page < 0) {
+            return badRequest("Page number cannot be negative");
+        }
+
+        // Validate size
+        if (size <= 0) {
+            return badRequest("Page size must be greater than 0");
+        }
+
+        // Validate price
+        if (minPrice != null
+                && minPrice.compareTo(BigDecimal.ZERO) < 0) {
+
+            return badRequest("Minimum price cannot be negative");
+        }
+
+        if (maxPrice != null
+                && maxPrice.compareTo(BigDecimal.ZERO) < 0) {
+
+            return badRequest("Maximum price cannot be negative");
+        }
+
+        // Validate price range
+        if (minPrice != null
+                && maxPrice != null
+                && minPrice.compareTo(maxPrice) > 0) {
+
+            return badRequest(
+                    "Minimum price cannot be greater than maximum price"
+            );
+        }
+
+        // Read sorting parameters
+        String[] sortParts = sort.split(",");
+
+        String sortBy = sortParts[0];
+        String direction = "asc";
+
+        if (sortParts.length > 1) {
+            direction = sortParts[1];
+        }
+
+        // Validate sort field
+        if (!isValidSortField(sortBy)) {
+
+            return badRequest(
+                    "Invalid sort field. Allowed fields: id, name, price, category, stock, createdAt, updatedAt"
+            );
+        }
+
+        // Validate sort direction
+        if (!direction.equalsIgnoreCase("asc")
+                && !direction.equalsIgnoreCase("desc")) {
+
+            return badRequest(
+                    "Invalid sort direction. Use asc or desc"
+            );
+        }
+
+        // Call ProductService
+        // IMPORTANT:
+        // Order of parameters matches ProductService
+        Page<ProductResponse> products =
+                productService.getProductsWithFilters(
+                        page,
+                        size,
+                        sortBy,
+                        direction,
+                        category,
+                        minPrice,
+                        maxPrice
+                );
 
         return ResponseEntity.ok(products);
     }
 
-    // =========================================================
+    // =====================================================
     // GET PRODUCT BY ID
-    // GET /api/v1/products/{id}
-    // =========================================================
+    // =====================================================
+
     @GetMapping("/{id}")
-    public ResponseEntity<?> getProductById(@PathVariable Long id) {
+    public ResponseEntity<?> getProductById(
+            @PathVariable Long id) {
 
-        Optional<Product> product = productRepository.findById(id);
+        Optional<ProductResponse> product =
+                productService.getProductById(id);
 
-        if (product.isPresent()) {
-            return ResponseEntity.ok(product.get());
+        if (product.isEmpty()) {
+
+            return ResponseEntity
+                    .status(HttpStatus.NOT_FOUND)
+                    .body(
+                            new ErrorResponse(
+                                    404,
+                                    "Product not found with id: " + id
+                            )
+                    );
         }
 
-        return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body("Product not found with id: " + id);
+        return ResponseEntity.ok(product.get());
     }
 
-    // =========================================================
+    // =====================================================
     // CREATE PRODUCT
-    // POST /api/v1/products
-    // =========================================================
+    // =====================================================
+
     @PostMapping
-    public ResponseEntity<?> createProduct(@RequestBody Product product) {
+    public ResponseEntity<?> createProduct(
+            @Valid @RequestBody CreateProductRequest request) {
 
-        if (product.getName() == null || product.getName().trim().isEmpty()) {
-            return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body("Product name is required");
-        }
-
-        if (product.getPrice() == null || product.getPrice().signum() < 0) {
-            return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body("Product price must be greater than or equal to 0");
-        }
-
-        if (product.getStock() == null || product.getStock() < 0) {
-            return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body("Product stock must be greater than or equal to 0");
-        }
-
-        Product savedProduct = productRepository.save(product);
+        ProductResponse createdProduct =
+                productService.createProduct(request);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(savedProduct);
+                .body(createdProduct);
     }
 
-    // =========================================================
-    // COMPLETE UPDATE
-    // PUT /api/v1/products/{id}
-    // =========================================================
+    // =====================================================
+    // UPDATE PRODUCT - PUT
+    // =====================================================
+
     @PutMapping("/{id}")
     public ResponseEntity<?> updateProduct(
             @PathVariable Long id,
-            @RequestBody Product productDetails) {
+            @Valid @RequestBody UpdateProductRequest request) {
 
-        Optional<Product> optionalProduct = productRepository.findById(id);
+        Optional<ProductResponse> updatedProduct =
+                productService.updateProduct(id, request);
 
-        if (optionalProduct.isEmpty()) {
+        if (updatedProduct.isEmpty()) {
+
             return ResponseEntity
                     .status(HttpStatus.NOT_FOUND)
-                    .body("Product not found with id: " + id);
+                    .body(
+                            new ErrorResponse(
+                                    404,
+                                    "Product not found with id: " + id
+                            )
+                    );
         }
 
-        if (productDetails.getName() == null
-                || productDetails.getName().trim().isEmpty()) {
-
-            return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body("Product name is required");
-        }
-
-        if (productDetails.getPrice() == null
-                || productDetails.getPrice().signum() < 0) {
-
-            return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body("Product price must be greater than or equal to 0");
-        }
-
-        if (productDetails.getStock() == null
-                || productDetails.getStock() < 0) {
-
-            return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body("Product stock must be greater than or equal to 0");
-        }
-
-        Product product = optionalProduct.get();
-
-        product.setName(productDetails.getName());
-        product.setDescription(productDetails.getDescription());
-        product.setPrice(productDetails.getPrice());
-        product.setCategory(productDetails.getCategory());
-        product.setStock(productDetails.getStock());
-        product.setStatus(productDetails.getStatus());
-
-        Product updatedProduct = productRepository.save(product);
-
-        return ResponseEntity.ok(updatedProduct);
+        return ResponseEntity.ok(updatedProduct.get());
     }
 
-    // =========================================================
-    // PARTIAL UPDATE
-    // PATCH /api/v1/products/{id}
-    // =========================================================
+    // =====================================================
+    // PARTIAL UPDATE - PATCH
+    // =====================================================
+
     @PatchMapping("/{id}")
     public ResponseEntity<?> patchProduct(
             @PathVariable Long id,
-            @RequestBody Map<String, Object> updates) {
+            @RequestBody PatchProductRequest request) {
 
-        Optional<Product> optionalProduct = productRepository.findById(id);
+        Optional<ProductResponse> updatedProduct =
+                productService.patchProduct(id, request);
 
-        if (optionalProduct.isEmpty()) {
+        if (updatedProduct.isEmpty()) {
+
             return ResponseEntity
                     .status(HttpStatus.NOT_FOUND)
-                    .body("Product not found with id: " + id);
+                    .body(
+                            new ErrorResponse(
+                                    404,
+                                    "Product not found with id: " + id
+                            )
+                    );
         }
 
-        if (updates == null || updates.isEmpty()) {
-            return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body("At least one field is required for PATCH");
-        }
-
-        Product product = optionalProduct.get();
-
-        // Update name
-        if (updates.containsKey("name")) {
-            Object name = updates.get("name");
-
-            if (name == null || name.toString().trim().isEmpty()) {
-                return ResponseEntity
-                        .status(HttpStatus.BAD_REQUEST)
-                        .body("Product name cannot be empty");
-            }
-
-            product.setName(name.toString());
-        }
-
-        // Update description
-        if (updates.containsKey("description")) {
-            Object description = updates.get("description");
-
-            if (description != null) {
-                product.setDescription(description.toString());
-            }
-        }
-
-        // Update category
-        if (updates.containsKey("category")) {
-            Object category = updates.get("category");
-
-            if (category != null) {
-                product.setCategory(category.toString());
-            }
-        }
-
-        // Update status
-        if (updates.containsKey("status")) {
-            Object status = updates.get("status");
-
-            if (status != null) {
-                product.setStatus(status.toString());
-            }
-        }
-
-        // Update price
-        if (updates.containsKey("price")) {
-            Object priceValue = updates.get("price");
-
-            try {
-                if (priceValue == null) {
-                    return ResponseEntity
-                            .status(HttpStatus.BAD_REQUEST)
-                            .body("Price cannot be null");
-                }
-
-                java.math.BigDecimal price =
-                        new java.math.BigDecimal(priceValue.toString());
-
-                if (price.signum() < 0) {
-                    return ResponseEntity
-                            .status(HttpStatus.BAD_REQUEST)
-                            .body("Price must be greater than or equal to 0");
-                }
-
-                product.setPrice(price);
-
-            } catch (NumberFormatException e) {
-                return ResponseEntity
-                        .status(HttpStatus.BAD_REQUEST)
-                        .body("Invalid price value");
-            }
-        }
-
-        // Update stock
-        if (updates.containsKey("stock")) {
-            Object stockValue = updates.get("stock");
-
-            try {
-                if (stockValue == null) {
-                    return ResponseEntity
-                            .status(HttpStatus.BAD_REQUEST)
-                            .body("Stock cannot be null");
-                }
-
-                Integer stock = Integer.valueOf(stockValue.toString());
-
-                if (stock < 0) {
-                    return ResponseEntity
-                            .status(HttpStatus.BAD_REQUEST)
-                            .body("Stock must be greater than or equal to 0");
-                }
-
-                product.setStock(stock);
-
-            } catch (NumberFormatException e) {
-                return ResponseEntity
-                        .status(HttpStatus.BAD_REQUEST)
-                        .body("Invalid stock value");
-            }
-        }
-
-        Product updatedProduct = productRepository.save(product);
-
-        return ResponseEntity.ok(updatedProduct);
+        return ResponseEntity.ok(updatedProduct.get());
     }
 
-    // =========================================================
+    // =====================================================
     // DELETE PRODUCT
-    // DELETE /api/v1/products/{id}
-    // =========================================================
+    // =====================================================
+
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteProduct(@PathVariable Long id) {
+    public ResponseEntity<?> deleteProduct(
+            @PathVariable Long id) {
 
-        Optional<Product> product = productRepository.findById(id);
+        boolean deleted =
+                productService.deleteProduct(id);
 
-        if (product.isEmpty()) {
+        if (!deleted) {
+
             return ResponseEntity
                     .status(HttpStatus.NOT_FOUND)
-                    .body("Product not found with id: " + id);
+                    .body(
+                            new ErrorResponse(
+                                    404,
+                                    "Product not found with id: " + id
+                            )
+                    );
         }
 
-        productRepository.deleteById(id);
+        return ResponseEntity
+                .noContent()
+                .build();
+    }
 
-        return ResponseEntity.noContent().build();
+    // =====================================================
+    // BAD REQUEST
+    // =====================================================
+
+    private ResponseEntity<ErrorResponse> badRequest(
+            String message) {
+
+        ErrorResponse errorResponse =
+                new ErrorResponse(
+                        HttpStatus.BAD_REQUEST.value(),
+                        message
+                );
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(errorResponse);
+    }
+
+    // =====================================================
+    // VALID SORT FIELDS
+    // =====================================================
+
+    private boolean isValidSortField(String sortBy) {
+
+        return sortBy.equals("id")
+                || sortBy.equals("name")
+                || sortBy.equals("price")
+                || sortBy.equals("category")
+                || sortBy.equals("stock")
+                || sortBy.equals("createdAt")
+                || sortBy.equals("updatedAt");
     }
 }
