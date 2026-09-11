@@ -3,26 +3,60 @@ package product_service.dto;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
+@Schema(description = "Response containing product information")
 public class ProductResponse {
 
+    @Schema(description = "Unique identifier of the product", example = "101")
     private Long id;
+
+    @Schema(description = "Name of the product", example = "Laptop")
     private String name;
+
+    @Schema(
+        description = "Detailed description of the product",
+        example = "15-inch business laptop with 16GB RAM"
+    )
     private String description;
+
+    @Schema(description = "Product price", example = "799.99")
     private BigDecimal price;
+
+    @Schema(description = "Product category", example = "Electronics")
     private String category;
+
+    @Schema(description = "Available quantity in stock", example = "25")
     private Integer stock;
+
+    @Schema(description = "Current product status", example = "ACTIVE")
     private String status;
+
+    @Schema(
+        description = "Date and time when the product was created",
+        example = "2026-09-11T10:30:00"
+    )
     private LocalDateTime createdAt;
+
+    @Schema(
+        description = "Date and time when the product was last updated",
+        example = "2026-09-11T11:45:00"
+    )
     private LocalDateTime updatedAt;
 
     public ProductResponse() {
     }
 
-    public ProductResponse(Long id, String name, String description,
-                           BigDecimal price, String category,
-                           Integer stock, String status,
-                           LocalDateTime createdAt,
-                           LocalDateTime updatedAt) {
+    public ProductResponse(
+            Long id,
+            String name,
+            String description,
+            BigDecimal price,
+            String category,
+            Integer stock,
+            String status,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt) {
 
         this.id = id;
         this.name = name;
