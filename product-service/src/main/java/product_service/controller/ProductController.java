@@ -467,6 +467,11 @@ public class ProductController {
 
         return ResponseEntity.noContent().build();
     }
+    @GetMapping("/public")
+    @Operation(summary="public product info",description="A public endpoint that does not require authentication")
+    public ResponseEntity<String> publicEndpoint(){
+        return ResponseEntity.ok("This is a public endpoint -no login needed!");
+    }
 
     private ResponseEntity<ErrorResponse> badRequest(
             String message) {

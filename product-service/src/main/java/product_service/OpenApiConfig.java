@@ -16,4 +16,4 @@ public class OpenApiConfig {
                         .description("REST API for managing products in the Microservices Architecture")
                         .version("1.0.0"));
     }
-}
+} 

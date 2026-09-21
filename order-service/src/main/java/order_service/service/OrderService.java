@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
+import order_service.client.UserServiceClient;
 import order_service.entity.Order;
 import order_service.repository.OrderRepository;
 
@@ -12,9 +13,11 @@ import order_service.repository.OrderRepository;
 public class OrderService {
 
     private final OrderRepository orderRepository;
+    private final UserServiceClient userServiceClient;
 
-    public OrderService(OrderRepository orderRepository) {
+    public OrderService(OrderRepository orderRepository, UserServiceClient userServiceClient) {
         this.orderRepository = orderRepository;
+        this.userServiceClient = userServiceClient;
     }
 
     // 1. Get all orders
@@ -32,8 +35,13 @@ public class OrderService {
         return orderRepository.findByUserId(userId);
     }
 
-    // 4. Create order
+    // 4. Create order (now checks with User Service first)
     public Order createOrder(Order order) {
+
+        // Ask User Service: does this user actually exist?
+        if (!userServiceClient.userExists(order.getUserId())) {
+            throw new RuntimeException("User not found with id: " + order.getUserId());
+        }
 
         // Set default status when creating a new order
         if (order.getStatus() == null || order.getStatus().isBlank()) {
