@@ -10,6 +10,7 @@ public class OrderWithUserResponse {
     private BigDecimal amount;
     private String status;
     private UserResponse user;
+    private String message; // Step 6: set only when User Service is unavailable (fallback triggered)
 
     public OrderWithUserResponse() {
     }
@@ -70,5 +71,13 @@ public class OrderWithUserResponse {
 
     public void setUser(UserResponse user) {
         this.user = user;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
     }
 }

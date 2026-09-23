@@ -3,7 +3,6 @@ package order_service.controller;
 import java.util.List;
 import java.util.Map;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -54,30 +53,40 @@ public class OrderController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // 2b. Get Order by ID WITH user details combined in (Step 7)
+    // 2b. Get Order by ID WITH user details combined in (Task 01 Step 7,
+    // Task 03 Step 6: gracefully degrades to user=null + message if User
+    // Service is unavailable or the circuit breaker is OPEN)
     @GetMapping("/{id}/with-user")
     public ResponseEntity<?> getOrderWithUser(@PathVariable Long id) {
 
         return orderService.getOrderById(id)
                 .map(order -> {
+
+                    UserResponse user;
                     try {
-                        UserResponse user = userServiceClient.getUserDetails(order.getUserId());
-
-                        OrderWithUserResponse response = new OrderWithUserResponse(
-                                order.getId(),
-                                order.getProductName(),
-                                order.getQuantity(),
-                                order.getAmount(),
-                                order.getStatus(),
-                                user
-                        );
-
-                        return ResponseEntity.ok(response);
+                        user = userServiceClient.getUserDetails(order.getUserId());
                     } catch (RuntimeException e) {
-                        // Step 9: User Service down or user missing -> fail gracefully, not a raw 500
-                        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                                .body(e.getMessage());
+                        // Genuine error, e.g. "user not found" - not a graceful-degradation case
+                        return ResponseEntity.badRequest().body(e.getMessage());
                     }
+
+                    OrderWithUserResponse response = new OrderWithUserResponse(
+                            order.getId(),
+                            order.getProductName(),
+                            order.getQuantity(),
+                            order.getAmount(),
+                            order.getStatus(),
+                            user
+                    );
+
+                    if (user == null) {
+                        // Fallback was triggered: User Service unavailable / circuit OPEN.
+                        // Still return 200 OK with the order data we DO have, plus a
+                        // clear message, instead of failing the whole request.
+                        response.setMessage("User service temporarily unavailable");
+                    }
+
+                    return ResponseEntity.ok(response);
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
