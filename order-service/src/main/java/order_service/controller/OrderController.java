@@ -3,13 +3,16 @@ package order_service.controller;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import order_service.client.UserServiceClient;
+import order_service.dto.OrderEvent;
 import order_service.dto.OrderWithUserResponse;
 import order_service.dto.UserResponse;
 import order_service.entity.Order;
+import order_service.service.KafkaProducerService;
 import order_service.service.OrderService;
 
 @RestController
@@ -18,10 +21,14 @@ public class OrderController {
 
     private final OrderService orderService;
     private final UserServiceClient userServiceClient;
+    private final KafkaProducerService kafkaProducerService;
 
-    public OrderController(OrderService orderService, UserServiceClient userServiceClient) {
+    public OrderController(OrderService orderService,
+                            UserServiceClient userServiceClient,
+                            KafkaProducerService kafkaProducerService) {
         this.orderService = orderService;
         this.userServiceClient = userServiceClient;
+        this.kafkaProducerService = kafkaProducerService;
     }
 
     // 1. Create Order
@@ -38,6 +45,16 @@ public class OrderController {
 
         try {
             Order savedOrder = orderService.createOrder(order);
+
+            // Publish ORDER_CREATED event to Kafka
+            OrderEvent event = new OrderEvent(
+                    savedOrder.getId(),
+                    savedOrder.getUserId(),
+                    savedOrder.getAmount(),
+                    "ORDER_CREATED"
+            );
+            kafkaProducerService.sendOrderCreatedEvent(event);
+
             return ResponseEntity.ok(savedOrder);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -53,40 +70,30 @@ public class OrderController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // 2b. Get Order by ID WITH user details combined in (Task 01 Step 7,
-    // Task 03 Step 6: gracefully degrades to user=null + message if User
-    // Service is unavailable or the circuit breaker is OPEN)
+    // 2b. Get Order by ID WITH user details combined in (Step 7)
     @GetMapping("/{id}/with-user")
     public ResponseEntity<?> getOrderWithUser(@PathVariable Long id) {
 
         return orderService.getOrderById(id)
                 .map(order -> {
-
-                    UserResponse user;
                     try {
-                        user = userServiceClient.getUserDetails(order.getUserId());
+                        UserResponse user = userServiceClient.getUserDetails(order.getUserId());
+
+                        OrderWithUserResponse response = new OrderWithUserResponse(
+                                order.getId(),
+                                order.getProductName(),
+                                order.getQuantity(),
+                                order.getAmount(),
+                                order.getStatus(),
+                                user
+                        );
+
+                        return ResponseEntity.ok(response);
                     } catch (RuntimeException e) {
-                        // Genuine error, e.g. "user not found" - not a graceful-degradation case
-                        return ResponseEntity.badRequest().body(e.getMessage());
+                        // Step 9: User Service down or user missing -> fail gracefully, not a raw 500
+                        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                                .body(e.getMessage());
                     }
-
-                    OrderWithUserResponse response = new OrderWithUserResponse(
-                            order.getId(),
-                            order.getProductName(),
-                            order.getQuantity(),
-                            order.getAmount(),
-                            order.getStatus(),
-                            user
-                    );
-
-                    if (user == null) {
-                        // Fallback was triggered: User Service unavailable / circuit OPEN.
-                        // Still return 200 OK with the order data we DO have, plus a
-                        // clear message, instead of failing the whole request.
-                        response.setMessage("User service temporarily unavailable");
-                    }
-
-                    return ResponseEntity.ok(response);
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
