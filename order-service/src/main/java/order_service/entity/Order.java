@@ -19,7 +19,7 @@ public class Order {
     private Long id;
 
     private Long userId;
-
+private Long productId;
     private String productName;
 
     private Integer quantity;
@@ -106,5 +106,12 @@ public class Order {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+    public Long getProductId() {
+        return productId;
+    }
+
+    public void setProductId(Long productId) {
+        this.productId = productId;
     }
 }

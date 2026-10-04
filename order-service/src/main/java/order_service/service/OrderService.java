@@ -4,13 +4,17 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
-
+import org.springframework.beans.factory.annotation.Autowired;
+import order_service.kafka.SagaEventPublisher;
+import org.springframework.transaction.annotation.Transactional;
 import order_service.client.UserServiceClient;
 import order_service.entity.Order;
 import order_service.repository.OrderRepository;
 
 @Service
 public class OrderService {
+    @Autowired
+    private SagaEventPublisher sagaEventPublisher;
 
     private final OrderRepository orderRepository;
     private final UserServiceClient userServiceClient;
@@ -36,6 +40,7 @@ public class OrderService {
     }
 
     // 4. Create order (now checks with User Service first)
+    @Transactional
     public Order createOrder(Order order) {
 
         // Ask User Service: does this user actually exist?
@@ -45,10 +50,19 @@ public class OrderService {
 
         // Set default status when creating a new order
         if (order.getStatus() == null || order.getStatus().isBlank()) {
-            order.setStatus("CREATED");
+            order.setStatus("PENDING");
         }
 
-        return orderRepository.save(order);
+    Order saved = orderRepository.save(order);
+
+        String amount = saved.getAmount() == null ? "0" : saved.getAmount().toPlainString();
+        String event = "{\"orderId\":" + saved.getId()
+                + ",\"productId\":" + saved.getProductId()
+                + ",\"quantity\":" + saved.getQuantity()
+                + ",\"amount\":" + amount + "}";
+        sagaEventPublisher.send("order-created", String.valueOf(saved.getId()), event);
+
+        return saved;
     }
 
     // 5. Update order
