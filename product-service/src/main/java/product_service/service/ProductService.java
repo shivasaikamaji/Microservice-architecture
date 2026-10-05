@@ -17,7 +17,8 @@ import product_service.dto.ProductResponse;
 import product_service.dto.UpdateProductRequest;
 import product_service.entity.Product;
 import product_service.repository.ProductRepository;
-
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 @Service
 public class ProductService {
 
@@ -86,8 +87,9 @@ public class ProductService {
     }
 
     // Get product by ID
+    @Cacheable(value = "products", key = "#id", unless = "#result == null")
     public Optional<ProductResponse> getProductById(Long id) {
-
+System.out.println(">>> CACHE MISS: reading from DB");
         return productRepository.findById(id)
                 .map(this::convertToResponse);
     }
@@ -118,6 +120,7 @@ public class ProductService {
     }
 
     // Update product
+    @CacheEvict(value = "products", key = "#id")
     public Optional<ProductResponse> updateProduct(
             Long id,
             UpdateProductRequest request) {
@@ -148,6 +151,7 @@ public class ProductService {
     }
 
     // Patch product
+    @CacheEvict(value = "products", key = "#id")
     public Optional<ProductResponse> patchProduct(
             Long id,
             PatchProductRequest request) {
@@ -198,6 +202,7 @@ public class ProductService {
     }
 
     // Delete product
+    @CacheEvict(value = "products", key = "#id")
     public boolean deleteProduct(Long id) {
 
         if (!productRepository.existsById(id)) {

@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(description = "Response containing product information")
-public class ProductResponse {
+public class ProductResponse implements java.io.Serializable{
 
     @Schema(description = "Unique identifier of the product", example = "101")
     private Long id;
