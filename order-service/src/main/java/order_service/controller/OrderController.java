@@ -14,26 +14,35 @@ import order_service.dto.UserResponse;
 import order_service.entity.Order;
 import order_service.service.KafkaProducerService;
 import order_service.service.OrderService;
+import order_service.service.IdempotencyService;
 
 @RestController
 @RequestMapping("/api/v1/orders")
 public class OrderController {
 
-    private final OrderService orderService;
+   private final OrderService orderService;
     private final UserServiceClient userServiceClient;
     private final KafkaProducerService kafkaProducerService;
+    private final IdempotencyService idempotencyService;
 
     public OrderController(OrderService orderService,
                             UserServiceClient userServiceClient,
-                            KafkaProducerService kafkaProducerService) {
+                            KafkaProducerService kafkaProducerService,
+                            IdempotencyService idempotencyService) {
         this.orderService = orderService;
         this.userServiceClient = userServiceClient;
         this.kafkaProducerService = kafkaProducerService;
+        this.idempotencyService = idempotencyService;
     }
-
-    // 1. Create Order
+    // 1. Create Order (idempotent)
     @PostMapping
-    public ResponseEntity<?> createOrder(@RequestBody Order order) {
+    public ResponseEntity<?> createOrder(
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestBody Order order) {
+
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            return ResponseEntity.badRequest().body("Idempotency-Key header is required");
+        }
 
         if (order.getUserId() == null) {
             return ResponseEntity.badRequest().body("userId is required");
@@ -43,10 +52,40 @@ public class OrderController {
             return ResponseEntity.badRequest().body("quantity must be greater than 0");
         }
 
-        try {
-            Order savedOrder = orderService.createOrder(order);
+        Long userId = order.getUserId();
 
-            // Publish ORDER_CREATED event to Kafka
+        // Step 6: duplicate request -> do NOT create another order
+        boolean firstTime = idempotencyService.startProcessing(userId, idempotencyKey);
+        if (!firstTime) {
+            String status = idempotencyService.getStatus(userId, idempotencyKey);
+            Long orderId = idempotencyService.getOrderId(userId, idempotencyKey);
+
+            if ("COMPLETED".equals(status) && orderId != null) {
+                var existing = orderService.getOrderById(orderId);
+                if (existing.isPresent()) {
+                    return ResponseEntity.ok()
+                            .header("Idempotent-Replayed", "true")
+                            .body(existing.get());
+                }
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body("Original order could not be found");
+            }
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body("A request with this Idempotency-Key is still being processed");
+        }
+
+        // Step 5: first request -> create the order and store the result
+        Order savedOrder;
+        try {
+            savedOrder = orderService.createOrder(order);
+        } catch (RuntimeException e) {
+            idempotencyService.remove(userId, idempotencyKey); // allow a retry
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+
+        idempotencyService.markCompleted(userId, idempotencyKey, savedOrder.getId());
+
+        try {
             OrderEvent event = new OrderEvent(
                     savedOrder.getId(),
                     savedOrder.getUserId(),
@@ -54,11 +93,11 @@ public class OrderController {
                     "ORDER_CREATED"
             );
             kafkaProducerService.sendOrderCreatedEvent(event);
-
-            return ResponseEntity.ok(savedOrder);
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            System.out.println("Order saved but Kafka event failed: " + e.getMessage());
         }
+
+        return ResponseEntity.ok(savedOrder);
     }
 
     // 2. Get Order by ID (plain, no user info)
