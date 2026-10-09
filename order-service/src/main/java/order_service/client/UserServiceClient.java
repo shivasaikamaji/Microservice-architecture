@@ -12,6 +12,8 @@ import org.springframework.web.client.RestTemplate;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 
 import order_service.dto.UserResponse;
+import jakarta.annotation.PostConstruct;
+import org.slf4j.MDC;
 
 @Component
 public class UserServiceClient {
@@ -33,6 +35,16 @@ public class UserServiceClient {
         } catch (HttpClientErrorException.NotFound e) {
             return false;
         }
+    }
+    @PostConstruct
+    public void addCorrelationIdToOutgoingCalls() {
+        restTemplate.getInterceptors().add((request, body, execution) -> {
+            String id = MDC.get("correlationId");
+            if (id != null) {
+                request.getHeaders().set("X-Correlation-Id", id);
+            }
+            return execution.execute(request, body);
+        });
     }
 
     // Step 4: @CircuitBreaker wraps this whole method (including the retry loop).
