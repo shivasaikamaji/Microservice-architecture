@@ -47,7 +47,7 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
             log.info("{\"timestamp\":\"{}\",\"service\":\"{}\",\"correlationId\":\"{}\",\"endpoint\":\"{}\",\"method\":\"{}\",\"status\":{},\"durationMs\":{}}",
                     Instant.now(), serviceName, id, request.getRequestURI(),
                     request.getMethod(), response.getStatus(), duration);
-            MDC.clear();
+            MDC.remove("correlationId");
         }
     }
 }

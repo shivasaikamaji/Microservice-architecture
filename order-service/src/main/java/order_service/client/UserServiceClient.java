@@ -102,11 +102,13 @@ public class UserServiceClient {
                 }
 
                 try {
-                    Thread.sleep(delay);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                }
-                delay *= 2;
+    Thread.sleep(delay);
+} catch (InterruptedException ie) {
+    Thread.currentThread().interrupt();
+    throw new RuntimeException(
+            "Retry interrupted while contacting User Service", ie);
+}
+delay *= 2;
             }
         }
 

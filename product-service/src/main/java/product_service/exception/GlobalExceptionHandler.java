@@ -51,21 +51,21 @@ public class GlobalExceptionHandler {
         );
     }
 
-    // Handle other runtime exceptions
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<ErrorResponse> handleRuntimeException(
-            RuntimeException ex) {
+// Handle unexpected runtime exceptions
+@ExceptionHandler(RuntimeException.class)
+public ResponseEntity<ErrorResponse> handleRuntimeException(
+        RuntimeException ex) {
+ex.printStackTrace();
+    ErrorResponse errorResponse = new ErrorResponse(
+            500,
+            "An unexpected error occurred"
+    );
 
-        ErrorResponse errorResponse = new ErrorResponse(
-                404,
-                ex.getMessage()
-        );
-
-        return new ResponseEntity<>(
-                errorResponse,
-                HttpStatus.NOT_FOUND
-        );
-    }
+    return new ResponseEntity<>(
+            errorResponse,
+            HttpStatus.INTERNAL_SERVER_ERROR
+    );
+}
 
     // Handle all other exceptions
     @ExceptionHandler(Exception.class)

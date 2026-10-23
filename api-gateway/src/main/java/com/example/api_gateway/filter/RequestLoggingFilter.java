@@ -41,13 +41,13 @@ public class RequestLoggingFilter implements GlobalFilter, Ordered {
 
         // Step 8: add the ID to the request sent to the service
         ServerHttpRequest request = exchange.getRequest().mutate()
-                .header(HEADER, requestId)
-                .build();
+        .headers(headers -> headers.set(HEADER, requestId))
+        .build();
         ServerWebExchange newExchange =
                 exchange.mutate().request(request).build();
 
         // also return it to the client so you can see it in Postman
-        newExchange.getResponse().getHeaders().add(HEADER, requestId);
+        
 
         return chain.filter(newExchange).then(Mono.fromRunnable(() -> {
             Route route = newExchange.getAttribute(
